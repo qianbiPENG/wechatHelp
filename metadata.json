@@ -1,0 +1,7 @@
+{
+  "name": "Copy of WeChat Insight Assistant",
+  "description": "An intelligent assistant that organizes your daily WeChat reading, chats, and thoughts into weekly reports, featuring voice interaction.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
