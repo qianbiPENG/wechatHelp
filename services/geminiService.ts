@@ -4,6 +4,7 @@ import { ClassificationResult, NoteItem, NoteType } from "../types";
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
+    console.error("API Key is missing. Please check your .env file or Vercel settings.");
     throw new Error("API Key not found");
   }
   return new GoogleGenAI({ apiKey });
@@ -51,56 +52,66 @@ export const classifyContent = async (
     Text context (if any): "${text}"`
   });
   
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: { parts },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          type: {
-            type: Type.STRING,
-            enum: ["thought", "article", "chat"],
-            description: "The category of the content"
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            type: {
+              type: Type.STRING,
+              enum: ["thought", "article", "chat"],
+              description: "The category of the content"
+            },
+            title: {
+              type: Type.STRING,
+              description: "A short catchy title"
+            },
+            summary: {
+              type: Type.STRING,
+              description: "A one-sentence summary"
+            },
+            content: {
+               type: Type.STRING,
+               description: "The full text content, extracted text, or audio transcription."
+            },
+            sourceUrl: {
+              type: Type.STRING,
+              description: "The extracted URL if found, otherwise null",
+              nullable: true
+            }
           },
-          title: {
-            type: Type.STRING,
-            description: "A short catchy title"
-          },
-          summary: {
-            type: Type.STRING,
-            description: "A one-sentence summary"
-          },
-          content: {
-             type: Type.STRING,
-             description: "The full text content, extracted text, or audio transcription."
-          },
-          sourceUrl: {
-            type: Type.STRING,
-            description: "The extracted URL if found, otherwise null",
-            nullable: true
-          }
-        },
-        required: ["type", "title", "summary", "content"]
+          required: ["type", "title", "summary", "content"]
+        }
       }
-    }
-  });
+    });
 
-  const result = JSON.parse(response.text || "{}");
-  
-  // Map string to enum safely
-  let noteType = NoteType.THOUGHT;
-  if (result.type === 'article') noteType = NoteType.ARTICLE;
-  if (result.type === 'chat') noteType = NoteType.CHAT;
+    // Robust JSON parsing
+    let jsonStr = response.text || "{}";
+    // Clean markdown code blocks if present
+    jsonStr = jsonStr.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    
+    const result = JSON.parse(jsonStr);
+    
+    // Map string to enum safely
+    let noteType = NoteType.THOUGHT;
+    if (result.type === 'article') noteType = NoteType.ARTICLE;
+    if (result.type === 'chat') noteType = NoteType.CHAT;
 
-  return {
-    type: noteType,
-    title: result.title || "Untitled Note",
-    summary: result.summary || "No summary available.",
-    content: result.content || text, // Fallback to input text if AI doesn't return it
-    sourceUrl: result.sourceUrl || undefined
-  };
+    return {
+      type: noteType,
+      title: result.title || "Untitled Note",
+      summary: result.summary || "No summary available.",
+      content: result.content || text, // Fallback to input text if AI doesn't return it
+      sourceUrl: result.sourceUrl || undefined
+    };
+  } catch (error) {
+    console.error("Gemini API Error in classifyContent:", error);
+    throw error;
+  }
 };
 
 export const generateWeeklyReport = async (items: NoteItem[]): Promise<string> => {
@@ -116,26 +127,31 @@ export const generateWeeklyReport = async (items: NoteItem[]): Promise<string> =
     date: new Date(item.createdAt).toLocaleDateString()
   })));
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview", // Using Pro for better reasoning on reports
-    contents: `You are a helpful personal assistant. Here is a list of my digital inputs from this week (thoughts, articles read, videos watched, chats, voice notes). 
-    
-    Please generate a high-quality Weekly Report in Markdown format.
-    
-    Structure:
-    1. **Weekly Highlight**: One major theme or insight from the week.
-    2. **Deep Dives (Reading & Watching)**: Summarize key learnings. 
-       **CRITICAL**: If an item has a 'sourceUrl', you MUST format the title as a markdown link: [Title](sourceUrl). 
-       If it was a video upload (hasMedia=true), mention it was a video.
-    3. **Mind Sparks (Thoughts & Voice Notes)**: Synthesize my random thoughts and voice memos into coherent ideas.
-    4. **Conversations (Chats)**: Key takeaways from conversations.
-    5. **Action Plan**: Suggested 3 actions based on this content.
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview", // Using Pro for better reasoning on reports
+      contents: `You are a helpful personal assistant. Here is a list of my digital inputs from this week (thoughts, articles read, videos watched, chats, voice notes). 
+      
+      Please generate a high-quality Weekly Report in Markdown format.
+      
+      Structure:
+      1. **Weekly Highlight**: One major theme or insight from the week.
+      2. **Deep Dives (Reading & Watching)**: Summarize key learnings. 
+         **CRITICAL**: If an item has a 'sourceUrl', you MUST format the title as a markdown link: [Title](sourceUrl). 
+         If it was a video upload (hasMedia=true), mention it was a video.
+      3. **Mind Sparks (Thoughts & Voice Notes)**: Synthesize my random thoughts and voice memos into coherent ideas.
+      4. **Conversations (Chats)**: Key takeaways from conversations.
+      5. **Action Plan**: Suggested 3 actions based on this content.
 
-    Style: Professional yet personal, encouraging, and clear. Use emojis where appropriate.
-    
-    Data:
-    ${itemsJson}`
-  });
+      Style: Professional yet personal, encouraging, and clear. Use emojis where appropriate.
+      
+      Data:
+      ${itemsJson}`
+    });
 
-  return response.text || "Failed to generate report.";
+    return response.text || "Failed to generate report.";
+  } catch (error) {
+    console.error("Gemini API Error in generateWeeklyReport:", error);
+    return "Failed to generate report. Please check your network or API quota.";
+  }
 };

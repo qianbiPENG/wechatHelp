@@ -16,7 +16,7 @@ import {
   Image as ImageIcon,
   AudioLines,
   Keyboard,
-  StopCircle
+  HelpCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { classifyContent, generateWeeklyReport } from './services/geminiService';
@@ -33,6 +33,7 @@ function App() {
   const [weeklyReport, setWeeklyReport] = useState<string>('');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false); // New state for Help Modal
   
   // Media Upload State
   const [selectedFile, setSelectedFile] = useState<{data: string, mimeType: string, preview: string, type: 'image' | 'video'} | null>(null);
@@ -152,7 +153,7 @@ function App() {
         summary: result.summary,
         createdAt: Date.now(),
         sourceUrl: result.sourceUrl,
-        media: { // Store audio for playback in feed if needed, or we can just keep text. Let's keep audio.
+        media: { // Store audio for playback in feed
             mimeType: audioBlob.type || 'audio/webm',
             data: base64Data
         }
@@ -161,7 +162,7 @@ function App() {
       setNotes(prev => [newNote, ...prev]);
     } catch (error) {
       console.error("Audio processing failed", error);
-      alert("Failed to transcribe audio.");
+      alert("Failed to process audio. Ensure API Key is set.");
     } finally {
       setIsProcessing(false);
     }
@@ -203,7 +204,7 @@ function App() {
       }
     } catch (error) {
       console.error("Processing failed", error);
-      alert("Failed to process content. Check console.");
+      alert("Failed to process content. Please ensure your API_KEY is correctly set in the .env file or deployment settings.");
     } finally {
       setIsProcessing(false);
     }
@@ -218,6 +219,7 @@ function App() {
       setWeeklyReport(report);
     } catch (error) {
       console.error("Report generation failed", error);
+      alert("Report generation failed.");
     } finally {
       setIsGeneratingReport(false);
     }
@@ -249,7 +251,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F2F2F2] flex flex-col max-w-lg mx-auto shadow-2xl overflow-hidden font-sans">
+    <div className="min-h-screen bg-[#F2F2F2] flex flex-col max-w-lg mx-auto shadow-2xl overflow-hidden font-sans relative">
       
       {/* Header */}
       <header className="bg-white px-4 py-3 sticky top-0 z-10 border-b border-gray-100 flex justify-between items-center shadow-sm">
@@ -266,7 +268,7 @@ function App() {
         <div className="flex space-x-2">
            {viewMode === ViewMode.FEED && (
              <>
-               {/* Summary Button in Header (Optional duplicate) */}
+               {/* Summary Button in Header */}
                {notes.length > 0 && (
                 <button 
                   onClick={handleGenerateReport}
@@ -276,7 +278,15 @@ function App() {
                   <span>Summary</span>
                 </button>
                )}
-               {/* Voice Chat (Live) Button in Header now */}
+               {/* Help Button */}
+               <button 
+                onClick={() => setIsHelpOpen(true)}
+                className="p-1.5 rounded-full bg-gray-100 text-gray-600 hover:text-wechat-green transition-colors"
+                title="How to add to WeChat"
+               >
+                 <HelpCircle size={18} />
+               </button>
+               {/* Voice Chat (Live) Button */}
                <button 
                 onClick={() => setIsVoiceChatOpen(true)}
                 className="p-1.5 rounded-full bg-gray-100 text-gray-600 hover:text-wechat-green transition-colors"
@@ -534,6 +544,61 @@ function App() {
         onClose={() => setIsVoiceChatOpen(false)} 
         notes={notes}
       />
+
+      {/* Help / Connect Guide Modal */}
+      {isHelpOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative animate-in fade-in zoom-in duration-300">
+             <button 
+                onClick={() => setIsHelpOpen(false)}
+                className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200"
+              >
+                <X size={18} className="text-gray-600" />
+              </button>
+             
+             <div className="p-8">
+               <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/WeChat_logo.svg/480px-WeChat_logo.svg.png" alt="WeChat" className="w-10 h-10 object-contain"/>
+               </div>
+               
+               <h2 className="text-xl font-bold text-center text-gray-800 mb-6">How to add to WeChat</h2>
+               
+               <div className="space-y-6">
+                 <div className="flex items-start space-x-4">
+                   <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
+                   <div>
+                     <h3 className="font-semibold text-sm text-gray-800">Send to File Transfer</h3>
+                     <p className="text-xs text-gray-500 mt-1">Copy this website URL and send it to "File Transfer" (文件传输助手) in WeChat.</p>
+                   </div>
+                 </div>
+
+                 <div className="flex items-start space-x-4">
+                   <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
+                   <div>
+                     <h3 className="font-semibold text-sm text-gray-800">Set as Float Window</h3>
+                     <p className="text-xs text-gray-500 mt-1">Open the link in WeChat, tap the <span className="font-bold">...</span> menu, and select <span className="font-bold">Floating Window (浮窗)</span>.</p>
+                   </div>
+                 </div>
+
+                 <div className="flex items-start space-x-4">
+                   <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
+                   <div>
+                     <h3 className="font-semibold text-sm text-gray-800">Quick Access</h3>
+                     <p className="text-xs text-gray-500 mt-1">Now swipe right from the edge of your screen in WeChat to access this assistant instantly!</p>
+                   </div>
+                 </div>
+               </div>
+
+               <button 
+                onClick={() => setIsHelpOpen(false)}
+                className="w-full bg-wechat-green text-white py-3 rounded-xl font-bold mt-8 shadow-md hover:bg-green-600 transition-all"
+               >
+                 Got it
+               </button>
+             </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
